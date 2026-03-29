@@ -1,19 +1,19 @@
-(V1.0.0.0.0.0)
+(V1.0.0.0.0.0)    https://github.com/EventhorizonM/DMI4A_Waffle/releases/download/V0.1/Waffle_Arduino_Project.ino.bin
 1- [Featuer]: New Outputs
 2- [Featuer]: Updated control method for faster response and cleaner results
 3- [Bug-Fix]: Motor glitch at high speed
 
-(V1.0.0.0.0.1)
+(V1.0.0.0.0.1)    https://github.com/EventhorizonM/DMI4A_Waffle/releases/download/V0.1/Waffle_Arduino_Project.ino.bin
 1- [Featuer]: New Outputs
 2- [Featuer]: Updated control method for faster response and cleaner results
 3- [Bug-Fix]: Motor glitch at high speed
 
-(V1.0.0.0.0.2)
+(V1.0.0.0.0.2)    https://github.com/EventhorizonM/DMI4A_Waffle/releases/download/V0.1/Waffle_Arduino_Project.ino.bin
 1- [Featuer]: New Outputs
 2- [Featuer]: Updated control method for faster response and cleaner results
 3- [Bug-Fix]: Motor glitch at high speed
 
-(V1.0.0.0.1.0)
+(V1.0.0.0.1.0)    https://github.com/EventhorizonM/DMI4A_Waffle/releases/download/V0.1/Waffle_Arduino_Project.ino.bin
 1- [Featuer]: New Outputs
 2- [Featuer]: Updated control method for faster response and cleaner results
 3- [Bug-Fix]: Motor glitch at high speed
