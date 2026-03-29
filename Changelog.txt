@@ -1,5 +1,3 @@
-https://github.com/EventhorizonM/DMI4A_Waffle/releases/download/Vxxx/Waffle_Arduino_Project.ino.bin
-
 (V1.0.0.0.0.0)    
 1- [Featuer]: New Outputs
 2- [Featuer]: Updated control method for faster response and cleaner results
