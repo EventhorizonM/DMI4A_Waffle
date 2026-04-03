@@ -1,24 +1,21 @@
 name: Generate Release Notes
-
 on:
+  workflow_dispatch:
   release:
-    types: [created, edited]
-
+    types: [created, published, edited, finalized, released, unpublished]
 jobs:
   create-release-notes:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create RNotes.txt from Release Body
-        run: |
-          echo "${{ github.event.release.body }}" > RNotes.txt
+      - name: Create RNotes.txt
+        run: echo "${{ github.event.release.body }}" > RNotes.txt
 
-      - name: Upload RNotes.txt to Release
+      - name: Upload RNotes.txt to release
         uses: softprops/action-gh-release@v1
         with:
           files: RNotes.txt
