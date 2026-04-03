@@ -1,0 +1,27 @@
+name: Generate Release Notes
+
+on:
+  release:
+    types: [created, edited]
+
+jobs:
+  create-release-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create RNotes.txt from Release Body
+        run: |
+          echo "${{ github.event.release.body }}" > RNotes.txt
+
+      - name: Upload RNotes.txt to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: RNotes.txt
+          tag_name: ${{ github.event.release.tag_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
