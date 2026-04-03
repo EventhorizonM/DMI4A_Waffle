@@ -1,0 +1,32 @@
+name: Generate Release Notes TXT
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  generate-txt:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Create RN.txt from release notes
+        env:
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          echo "$RELEASE_BODY" > RN.txt
+          echo "" >> RN.txt
+          echo "---" >> RN.txt
+          echo "Source: ${{ github.event.release.html_url }}" >> RN.txt
+      
+      - name: Upload to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ./RN.txt
+          asset_name: RN.txt
+          asset_content_type: text/plain
