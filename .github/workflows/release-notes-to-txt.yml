@@ -3,7 +3,14 @@ name: Generate Release Notes TXT
 on:
   release:
     types: [published, edited]
-
+    
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Who to greet'
+        required: true
+        default: 'World'
+        
 jobs:
   generate-txt:
     runs-on: ubuntu-latest
