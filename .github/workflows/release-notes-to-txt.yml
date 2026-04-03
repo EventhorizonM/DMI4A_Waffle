@@ -2,7 +2,7 @@ name: Generate Release Notes TXT
 
 on:
   release:
-    types: [published]
+    types: [published, edited, prereleased]  # Added 'edited' and 'prereleased'
 
 jobs:
   generate-txt:
