@@ -2,7 +2,7 @@ name: Generate Release Notes TXT
 
 on:
   release:
-    types: [published, edited, prereleased]  # Added 'edited' and 'prereleased'
+    types: [published, edited]
 
 jobs:
   generate-txt:
@@ -11,35 +11,24 @@ jobs:
       contents: write
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Get release notes using GitHub API
-        id: get_release
-        uses: actions/github-script@v7
-        with:
-          script: |
-            // Get release info using the GitHub API
-            const { data: release } = await github.rest.repos.getReleaseByTag({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              tag: context.payload.release.tag_name
-            });
-            
-            // Write release notes to RN.txt
-            const fs = require('fs');
-            const releaseNotes = release.body || '';
-            fs.writeFileSync('RN.txt', releaseNotes);
-            
-            // Store upload URL for next step
-            core.setOutput('upload_url', release.upload_url);
+      - name: Download current release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          # Fetch release notes using GitHub CLI
+          gh release view "$TAG_NAME" --json body --jq '.body' > RN.txt
+          
+          echo "Release notes saved to RN.txt"
+          echo "Content:"
+          cat RN.txt
       
       - name: Upload RN.txt to release
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./RN.txt
-          asset_name: RN.txt
-          asset_content_type: text/plain
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+        run: |
+          # Upload the file to the release
+          gh release upload "$TAG_NAME" RN.txt --clobber --repo ${{ github.repository }}
+          
+          echo "✅ Uploaded RN.txt to release $TAG_NAME"
