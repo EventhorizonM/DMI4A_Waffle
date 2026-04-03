@@ -1,8 +1,7 @@
 name: Generate Release Notes
 on:
-  workflow_dispatch:
   release:
-    types: [created, published, edited, finalized, released, unpublished]
+    types: [created, published, edited, finalized, released]
 jobs:
   create-release-notes:
     runs-on: ubuntu-latest
@@ -11,6 +10,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
 
       - name: Create RNotes.txt
         run: echo "${{ github.event.release.body }}" > RNotes.txt
