@@ -11,22 +11,35 @@ jobs:
       contents: write
     
     steps:
-      - name: Create RN.txt from release notes
-        env:
-          RELEASE_BODY: ${{ github.event.release.body }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          echo "$RELEASE_BODY" > RN.txt
-          echo "" >> RN.txt
-          echo "---" >> RN.txt
-          echo "Source: ${{ github.event.release.html_url }}" >> RN.txt
+      - name: Checkout code
+        uses: actions/checkout@v4
       
-      - name: Upload to release
+      - name: Get release notes using GitHub API
+        id: get_release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Get release info using the GitHub API
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: context.payload.release.tag_name
+            });
+            
+            // Write release notes to RN.txt
+            const fs = require('fs');
+            const releaseNotes = release.body || '';
+            fs.writeFileSync('RN.txt', releaseNotes);
+            
+            // Store upload URL for next step
+            core.setOutput('upload_url', release.upload_url);
+      
+      - name: Upload RN.txt to release
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
           asset_path: ./RN.txt
           asset_name: RN.txt
           asset_content_type: text/plain
