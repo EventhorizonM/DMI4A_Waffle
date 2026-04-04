@@ -22,12 +22,14 @@ jobs:
           # Create a Python script to handle this properly
           python3 << 'PYTHON_SCRIPT'
           import subprocess
+          import json
           import re
           
-          # Get all releases
-          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName', '-q', '.[].tagName'], 
+          # Get all releases as JSON
+          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
                                 capture_output=True, text=True)
-          tags = result.stdout.strip().split('\n')
+          releases = json.loads(result.stdout)
+          tags = [r['tagName'] for r in releases]
           
           # Read README
           with open('README.md', 'r') as f:
@@ -36,17 +38,18 @@ jobs:
           # Remove old "Published Versions" section
           content = re.sub(r'\nPublished Versions:.*', '', content, flags=re.DOTALL)
           
-          # Build new section
-          new_section = '\n\nPublished Versions:'
+          # Build new section with proper newlines
+          new_section = '\nPublished Versions:'
           for tag in tags:
-            if tag.strip():  # Only add non-empty tags
-              new_section += f'\n({tag.strip()})'
+            new_section += f'\n({tag})'
           
           # Write back
           with open('README.md', 'w') as f:
             f.write(content + new_section + '\n')
           
-          print("README updated successfully")
+          print(f"README updated with {len(tags)} releases")
+          for tag in tags:
+            print(f"  ({tag})")
           PYTHON_SCRIPT
 
       - name: Commit and push changes
