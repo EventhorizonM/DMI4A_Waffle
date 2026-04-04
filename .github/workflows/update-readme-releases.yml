@@ -13,8 +13,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: main
 
       - name: Fetch all releases
         id: releases
@@ -32,13 +30,6 @@ jobs:
 
       - name: Update README
         run: |
-          # Read the current README
-          README_CONTENT=$(cat README.md)
-          
-          # Create the new versions section
-          NEW_VERSIONS="${{ steps.releases.outputs.versions }}"
-          
-          # Replace the Published Versions section
           python3 << 'EOF'
           import re
           
@@ -68,4 +59,4 @@ jobs:
           git config --local user.name "GitHub Action"
           git add README.md
           git commit -m "chore: update README with released versions" || echo "No changes to commit"
-          git push || echo "Nothing to push"
+          git push origin HEAD:main
