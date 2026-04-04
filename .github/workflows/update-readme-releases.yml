@@ -27,7 +27,8 @@ jobs:
           
           try:
               # Get all releases with tags and their dates
-              result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName,createdAt,publishedAt,updatedAt'], 
+              # Using only available fields: tagName, createdAt, publishedAt
+              result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName,createdAt,publishedAt'], 
                                     capture_output=True, text=True, check=True)
               releases = json.loads(result.stdout)
               
@@ -35,8 +36,8 @@ jobs:
               tags_with_dates = []
               for r in releases:
                   tag = r['tagName']
-                  # Use publishedAt if available, fallback to createdAt, then updatedAt
-                  date_str = r.get('publishedAt') or r.get('createdAt') or r.get('updatedAt')
+                  # Use publishedAt if available (non-null), fallback to createdAt
+                  date_str = r.get('publishedAt') or r.get('createdAt')
                   
                   if date_str:
                       # Parse ISO format date
