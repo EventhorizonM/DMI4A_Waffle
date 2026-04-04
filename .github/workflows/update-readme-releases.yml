@@ -12,34 +12,87 @@ jobs:
       contents: write
     
     steps:
-      - name: Update README directly via API
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Update README via GitHub API (NO git commands)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # This script uses ONLY GitHub API - NO git commit, NO git push
+          python3 << 'PYTHON_SCRIPT'
+          import subprocess
+          import json
+          import re
+          import base64
+          import os
+          
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          
           # Get default branch
-          BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+          result = subprocess.run(['gh', 'repo', 'view', '--json', 'defaultBranchRef'], 
+                                capture_output=True, text=True)
+          repo_info = json.loads(result.stdout)
+          default_branch = repo_info['defaultBranchRef']['name']
+          print(f"Default branch: {default_branch}")
           
-          # Get current README SHA
-          SHA=$(gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BRANCH}" --jq '.sha')
+          # Get current README file info from API
+          result = subprocess.run(['gh', 'api', f'/repos/{repo}/contents/README.md?ref={default_branch}'], 
+                                capture_output=True, text=True)
+          file_info = json.loads(result.stdout)
+          current_sha = file_info['sha']
+          current_content = base64.b64decode(file_info['content']).decode('utf-8')
           
-          # Get releases and update README in one go
-          gh api --method PUT "/repos/${GITHUB_REPOSITORY}/contents/README.md" \
-            -f message="Update README with release tags [skip ci]" \
-            -f branch="${BRANCH}" \
-            -f sha="${SHA}" \
-            -f content="$(echo "$(gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BRANCH}" --jq '.content' | base64 -d | python3 -c "
-            import sys, re, json, subprocess
-            content = sys.stdin.read()
-            # Get releases
-            releases = json.loads(subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], capture_output=True, text=True).stdout)
-            tags = [r['tagName'] for r in releases]
-            # Remove old section
-            if '## Published Versions' in content:
-                content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
-            # Add new section
-            if tags:
-                content += '\n## Published Versions\n' + ''.join(f'- {tag}\n' for tag in tags)
-            # Cleanup
-            content = re.sub(r'\n{3,}', '\n\n', content)
-            print(content, end='')
-            ") | base64 -w 0)"
+          # Get all release tags
+          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
+                                capture_output=True, text=True)
+          releases = json.loads(result.stdout)
+          tags = [r['tagName'] for r in releases]
+          
+          # Update content
+          content = current_content
+          
+          # Remove existing Published Versions section
+          if '## Published Versions' in content:
+            content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
+            print("Removed old versions section")
+          
+          # Build new section
+          if tags:
+            new_section = '\n## Published Versions\n'
+            for tag in tags:
+              new_section += f'- {tag}\n'
+            print(f"Added {len(tags)} tags")
+          else:
+            new_section = ''
+          
+          # Clean up double newlines
+          content = re.sub(r'\n{3,}', '\n\n', content)
+          new_content = content + new_section
+          
+          # Only update if changed
+          if new_content == current_content:
+            print("No changes needed")
+            exit(0)
+          
+          # Update via API
+          encoded_content = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
+          
+          result = subprocess.run([
+            'gh', 'api', '--method', 'PUT', f'/repos/{repo}/contents/README.md',
+            '-f', f'message=Update README with release tags [skip ci]',
+            '-f', f'content={encoded_content}',
+            '-f', f'sha={current_sha}',
+            '-f', f'branch={default_branch}'
+          ], capture_output=True, text=True)
+          
+          if result.returncode == 0:
+            print("✅ README updated successfully via API")
+          else:
+            print(f"❌ Failed to update: {result.stderr}")
+            exit(1)
+          
+          PYTHON_SCRIPT
