@@ -43,7 +43,7 @@ jobs:
                       # Parse ISO format date
                       date_obj = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
                       formatted_date = date_obj.strftime('%d/%m/%Y')
-                      tags_with_dates.append(f'{tag} ({formatted_date})')
+                      tags_with_dates.append(f'{tag}   ({formatted_date})')
                   else:
                       tags_with_dates.append(tag)
               
