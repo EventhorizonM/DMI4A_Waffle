@@ -18,7 +18,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: main  # or whatever your default branch is
+          ref: main
+
+      - name: Switch to main branch
+        run: git checkout main
 
       - name: Update README with tags
         env:
