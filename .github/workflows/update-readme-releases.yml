@@ -17,95 +17,80 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Update README and commit via API
+      - name: Update README using gh API
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This script uses ONLY the GitHub API - NO git commands at all
+          # Get default branch
+          DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+          echo "Default branch: $DEFAULT_BRANCH"
+          
+          # Get current README content and SHA
+          gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${DEFAULT_BRANCH}" > readme_info.json
+          CURRENT_SHA=$(jq -r '.sha' readme_info.json)
+          echo "Current SHA: $CURRENT_SHA"
+          
+          # Decode current content
+          cat readme_info.json | jq -r '.content' | base64 -d > current_readme.md
+          
+          # Get all release tags
+          gh release list --json tagName > releases.json
+          
+          # Update README with Python
           python3 << 'PYTHON_SCRIPT'
-          import subprocess
           import json
           import re
-          import base64
-          import requests
-          import os
           
-          # Get repository info
-          repo = os.environ['GITHUB_REPOSITORY']
-          token = os.environ['GITHUB_TOKEN']
+          # Load current README
+          with open('current_readme.md', 'r') as f:
+              content = f.read()
           
-          headers = {
-              'Authorization': f'token {token}',
-              'Accept': 'application/vnd.github.v3+json'
-          }
+          # Load releases
+          with open('releases.json', 'r') as f:
+              releases = json.load(f)
           
-          # Get default branch
-          repo_url = f'https://api.github.com/repos/{repo}'
-          response = requests.get(repo_url, headers=headers)
-          default_branch = response.json()['default_branch']
-          print(f"Default branch: {default_branch}")
-          
-          # Get all release tags using gh CLI
-          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
-                                capture_output=True, text=True)
-          releases = json.loads(result.stdout)
           tags = [r['tagName'] for r in releases]
           
-          # Read current README content from the repo (not local file)
-          readme_url = f'https://api.github.com/repos/{repo}/contents/README.md?ref={default_branch}'
-          response = requests.get(readme_url, headers=headers)
-          
-          if response.status_code == 200:
-              current_data = response.json()
-              current_content = base64.b64decode(current_data['content']).decode('utf-8')
-              current_sha = current_data['sha']
-              print("Successfully fetched current README from repo")
-          else:
-              print(f"Error fetching README: {response.status_code}")
-              exit(1)
-          
           # Remove existing Published Versions section
-          if '## Published Versions' in current_content:
-              current_content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', current_content)
-              print("Removed existing Published Versions section")
+          if '## Published Versions' in content:
+              content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
           
           # Build new section
           if tags:
               new_section = '\n## Published Versions\n'
               for tag in tags:
                   new_section += f'- {tag}\n'
-              print(f"Added {len(tags)} tags")
           else:
               new_section = ''
-              print("No tags found")
           
-          # Clean up any double newlines
-          current_content = re.sub(r'\n{3,}', '\n\n', current_content)
-          new_content = current_content + new_section
+          # Clean up and write
+          content = re.sub(r'\n{3,}', '\n\n', content)
+          new_content = content + new_section
           
-          # Check if content actually changed
-          if new_content == current_content:
-              print("No changes needed - README already up to date")
-              exit(0)
+          with open('updated_readme.md', 'w') as f:
+              f.write(new_content)
           
-          # Update the file via API
-          update_url = f'https://api.github.com/repos/{repo}/contents/README.md'
-          encoded_content = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
+          # Check if changed
+          with open('current_readme.md', 'r') as f:
+              old_content = f.read()
           
-          payload = {
-              'message': 'Update README with release tags [skip ci]',
-              'content': encoded_content,
-              'sha': current_sha,
-              'branch': default_branch
-          }
-          
-          response = requests.put(update_url, headers=headers, json=payload)
-          
-          if response.status_code in [200, 201]:
-              print("✅ Successfully updated README.md via API")
+          if new_content == old_content:
+              print("NO_CHANGES")
           else:
-              print(f"❌ Failed to update README: {response.status_code}")
-              print(response.text)
-              exit(1)
-          
+              print("CHANGES_MADE")
           PYTHON_SCRIPT
+          
+          # If changes were made, update via API
+          if grep -q "CHANGES_MADE" <<< "$(python3 <<< 'print("CHANGES_MADE" if open("updated_readme.md").read() != open("current_readme.md").read() else "NO_CHANGES")')"; then
+              ENCODED=$(base64 -w 0 updated_readme.md)
+              
+              gh api --method PUT "/repos/${GITHUB_REPOSITORY}/contents/README.md" \
+                -f message="Update README with release tags [skip ci]" \
+                -f content="${ENCODED}" \
+                -f sha="${CURRENT_SHA}" \
+                -f branch="${DEFAULT_BRANCH}"
+              
+              echo "✅ README updated successfully"
+          else
+              echo "ℹ️ No changes needed"
+          fi
