@@ -15,7 +15,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
 
       - name: Update README with tags
@@ -60,8 +59,26 @@ jobs:
           PYTHON_SCRIPT
 
       - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "Update README with release tags [skip ci]"
-          branch: ${{ github.event.repository.default_branch }}
-          file_pattern: README.md
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          
+          # Check if there are changes to commit
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          # Get the default branch name
+          DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d ":" -f 2 | xargs)
+          echo "Default branch is: $DEFAULT_BRANCH"
+          
+          # Force create/switch to the default branch
+          git checkout -B $DEFAULT_BRANCH
+          
+          # Commit the changes
+          git commit -m "Update README with release tags [skip ci]"
+          
+          # Push to the default branch
+          git push origin $DEFAULT_BRANCH
