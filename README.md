@@ -4,3 +4,6 @@ This machine is awesome!
 You can make a delicious waffle with it :)
 With a lot of fantastic recipes...
 Enjoy using it ;)
+
+## Published Versions
+- V1.0.0.0.0.0
