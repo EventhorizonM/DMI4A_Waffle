@@ -25,6 +25,8 @@ jobs:
           import subprocess
           import json
           import re
+          import base64
+          import requests
           
           # Get all release tags
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
@@ -51,34 +53,42 @@ jobs:
           # Clean up any double newlines
           content = re.sub(r'\n{3,}', '\n\n', content)
           
-          # Write updated content
+          # Write updated content to file
           with open('README.md', 'w') as f:
             f.write(content + new_section)
           
           print(f"Updated with {len(tags)} tags")
           PYTHON_SCRIPT
 
-      - name: Commit and push changes
+      - name: Commit and push via API
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add README.md
+          # Get the current commit SHA of the default branch
+          DEFAULT_BRANCH=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}" | \
+            jq -r '.default_branch')
           
-          # Check if there are changes to commit
-          if git diff --quiet && git diff --staged --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
+          echo "Default branch: $DEFAULT_BRANCH"
           
-          # Get the default branch name
-          DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d ":" -f 2 | xargs)
-          echo "Default branch is: $DEFAULT_BRANCH"
+          # Get the current commit SHA
+          COMMIT_SHA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/${DEFAULT_BRANCH}" | \
+            jq -r '.commit.sha')
           
-          # Force create/switch to the default branch
-          git checkout -B $DEFAULT_BRANCH
+          echo "Current commit SHA: $COMMIT_SHA"
           
-          # Commit the changes
-          git commit -m "Update README with release tags [skip ci]"
+          # Encode the updated README file
+          CONTENT=$(base64 -w 0 README.md)
           
-          # Push to the default branch
-          git push origin $DEFAULT_BRANCH
+          # Create a new commit via API
+          curl -X PUT \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md" \
+            -d "{
+              \"message\": \"Update README with release tags [skip ci]\",
+              \"content\": \"${CONTENT}\",
+              \"sha\": \"$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md" | jq -r '.sha')\",
+              \"branch\": \"${DEFAULT_BRANCH}\"
+            }"
