@@ -10,6 +10,9 @@ on:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  
 jobs:
   create-release-notes:
     runs-on: ubuntu-latest
