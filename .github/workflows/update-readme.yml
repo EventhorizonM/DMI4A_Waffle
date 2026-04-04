@@ -15,40 +15,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Get all release tags
-        id: tags
+      - name: Update README with tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get all releases and extract tags
-          TAGS=$(gh release list --json tagName -q '.[].tagName')
+          # Read current README (remove old "Published Versions" section if it exists)
+          sed -i '/^Published Versions:/,$d' README.md
           
-          # Create temporary file with tags list
-          cat > /tmp/tags_list.txt << 'EOF'
-          Published Versions:
-          EOF
-          
-          while IFS= read -r tag; do
-            echo "($tag)" >> /tmp/tags_list.txt
-          done <<< "$TAGS"
-          
-          # Save to output
-          echo "tags_list<<EOF" >> $GITHUB_OUTPUT
-          cat /tmp/tags_list.txt >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Update README
-        run: |
-          # Read current README
-          README_CONTENT=$(cat README.md)
-          
-          # Remove old "Published Versions" section if it exists
-          README_CONTENT=$(echo "$README_CONTENT" | sed '/^Published Versions:/,$d')
-          
-          # Append new tags section
-          echo "$README_CONTENT" > README.md
+          # Add new Published Versions section
           echo "" >> README.md
-          cat /tmp/tags_list.txt >> README.md
+          echo "Published Versions:" >> README.md
+          
+          # Get all releases and append each tag on a new line
+          gh release list --json tagName -q '.[].tagName' | while read tag; do
+            echo "($tag)" >> README.md
+          done
 
       - name: Commit and push changes
         run: |
