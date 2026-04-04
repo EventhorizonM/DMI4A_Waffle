@@ -19,44 +19,29 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create a Python script to handle this properly
           python3 << 'PYTHON_SCRIPT'
           import subprocess
           import json
           import re
           
-          # Get all releases as JSON
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
                                 capture_output=True, text=True)
-          print("Raw output:", repr(result.stdout))
           releases = json.loads(result.stdout)
-          print("Parsed releases:", releases)
           tags = [r['tagName'] for r in releases]
-          print("Extracted tags:", tags)
           
-          # Read README
           with open('README.md', 'r') as f:
             content = f.read()
           
-          # Remove old "Published Versions" section
           content = re.sub(r'\nPublished Versions:.*', '', content, flags=re.DOTALL)
           
-          # Build new section with proper newlines
-          new_section = '\nPublished Versions:'
+          # Build new section with better formatting
+          new_section = '\n\n## Published Versions\n'
           for tag in tags:
-            new_section += f'\n({tag})'
+            new_section += f'- {tag}\n'
           
-          print("New section:", repr(new_section))
-          
-          # Write back
           with open('README.md', 'w') as f:
-            f.write(content + new_section + '\n')
-          
-          print("File written successfully")
+            f.write(content + new_section)
           PYTHON_SCRIPT
-          
-      - name: Show updated README
-        run: cat README.md
 
       - name: Commit and push changes
         run: |
