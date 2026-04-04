@@ -7,6 +7,7 @@ Enjoy using it ;)
 
 
 ## Published Versions
+- V4.0.0.0.0.0
 - V3.0.0.0.0.0
 - V0.2
 - V0.1
