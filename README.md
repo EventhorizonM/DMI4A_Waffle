@@ -3,7 +3,7 @@ Waffle machine with a 4.2" TFT screen
 This machine is awesome!
 You can make a delicious waffle with it :)
 With a lot of fantastic recipes...
-Enjoy using it ;)
+Enjoy using it ;)5
 
 
 ## Published Versions
