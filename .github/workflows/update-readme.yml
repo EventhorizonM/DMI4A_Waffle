@@ -20,9 +20,6 @@ jobs:
         with:
           ref: main
 
-      - name: Switch to main branch
-        run: git checkout main
-
       - name: Update README with tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,5 +52,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          git config --local push.default simple
           git add README.md
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push origin main)
