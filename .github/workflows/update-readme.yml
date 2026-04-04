@@ -19,17 +19,35 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Read current README (remove old "Published Versions" section if it exists)
-          sed -i '/^Published Versions:/,$d' README.md
+          # Create a Python script to handle this properly
+          python3 << 'PYTHON_SCRIPT'
+          import subprocess
+          import re
           
-          # Add new Published Versions section
-          echo "" >> README.md
-          echo "Published Versions:" >> README.md
+          # Get all releases
+          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName', '-q', '.[].tagName'], 
+                                capture_output=True, text=True)
+          tags = result.stdout.strip().split('\n')
           
-          # Get all releases and append each tag on a new line
-          gh release list --json tagName -q '.[].tagName' | while read tag; do
-            echo "($tag)" >> README.md
-          done
+          # Read README
+          with open('README.md', 'r') as f:
+            content = f.read()
+          
+          # Remove old "Published Versions" section
+          content = re.sub(r'\nPublished Versions:.*', '', content, flags=re.DOTALL)
+          
+          # Build new section
+          new_section = '\n\nPublished Versions:'
+          for tag in tags:
+            if tag.strip():  # Only add non-empty tags
+              new_section += f'\n({tag.strip()})'
+          
+          # Write back
+          with open('README.md', 'w') as f:
+            f.write(content + new_section + '\n')
+          
+          print("README updated successfully")
+          PYTHON_SCRIPT
 
       - name: Commit and push changes
         run: |
