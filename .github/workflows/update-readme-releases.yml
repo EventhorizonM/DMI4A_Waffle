@@ -18,7 +18,6 @@ jobs:
           fetch-depth: 0
 
       - name: Update README with tags
-        id: update
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -26,7 +25,6 @@ jobs:
           import subprocess
           import json
           import re
-          import os
           
           # Get all release tags
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
@@ -52,57 +50,52 @@ jobs:
           
           # Clean up any double newlines
           content = re.sub(r'\n{3,}', '\n\n', content)
-          final_content = content + new_section
           
           # Write updated content
           with open('README.md', 'w') as f:
-            f.write(final_content)
-          
-          # Save for later step
-          with open('updated_content.txt', 'w') as f:
-            f.write(final_content)
+            f.write(content + new_section)
           
           print(f"Updated with {len(tags)} tags")
           PYTHON_SCRIPT
 
-      - name: Commit via GitHub API
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push changes
         run: |
-          # Get default branch
-          DEFAULT_BRANCH=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}" | \
-            python3 -c "import sys, json; print(json.load(sys.stdin)['default_branch'])")
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
           
-          echo "Default branch: $DEFAULT_BRANCH"
+          # Get the default branch name
+          DEFAULT_BRANCH=$(git remote show origin | grep "HEAD branch" | cut -d ":" -f 2 | xargs)
+          echo "Default branch is: $DEFAULT_BRANCH"
           
-          # Get current file SHA and content
-          FILE_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${DEFAULT_BRANCH}")
-          
-          CURRENT_SHA=$(echo "$FILE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('sha', ''))")
-          
-          # Encode the new content
-          ENCODED_CONTENT=$(cat README.md | python3 -c "import sys, base64; print(base64.b64encode(sys.stdin.read().encode()).decode())")
-          
-          # Update the file via API
-          RESPONSE=$(curl -s -X PUT \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md" \
-            -d "{
-              \"message\": \"Update README with release tags [skip ci]\",
-              \"content\": \"${ENCODED_CONTENT}\",
-              \"sha\": \"${CURRENT_SHA}\",
-              \"branch\": \"${DEFAULT_BRANCH}\"
-            }")
-          
-          echo "$RESPONSE"
-          
-          if echo "$RESPONSE" | grep -q '"commit"'; then
-            echo "✅ Successfully updated README.md"
-          else
-            echo "❌ Failed to update README.md"
-            echo "$RESPONSE"
-            exit 1
+          # Check if we have changes
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
           fi
+          
+          # Add the changed file
+          git add README.md
+          
+          # Create a temporary branch from the current detached HEAD
+          TEMP_BRANCH="temp-update-readme-$(date +%s)"
+          git checkout -b $TEMP_BRANCH
+          
+          # Commit on the temporary branch
+          git commit -m "Update README with release tags [skip ci]"
+          
+          # Push the temporary branch
+          git push origin $TEMP_BRANCH
+          
+          # Use GitHub API to merge the temporary branch into default branch
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/merges" \
+            -d "{
+              \"base\": \"${DEFAULT_BRANCH}\",
+              \"head\": \"${TEMP_BRANCH}\",
+              \"commit_message\": \"Merge README update from ${TEMP_BRANCH}\"
+            }"
+          
+          # Delete the temporary branch
+          git push origin --delete $TEMP_BRANCH
