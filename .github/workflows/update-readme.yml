@@ -18,7 +18,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.repository.default_branch }}
+          ref: main
 
       - name: Update README with tags
         env:
@@ -53,4 +53,4 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add README.md
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push origin main)
