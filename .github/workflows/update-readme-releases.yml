@@ -12,7 +12,7 @@ jobs:
       contents: write
     
     steps:
-      - name: Update README via GitHub API
+      - name: Update README directly via GitHub API
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -26,45 +26,50 @@ jobs:
           
           # Get default branch
           result = subprocess.run(['gh', 'repo', 'view', '--json', 'defaultBranchRef'], 
-                                capture_output=True, text=True, check=True)
+                                capture_output=True, text=True)
           repo_info = json.loads(result.stdout)
           default_branch = repo_info['defaultBranchRef']['name']
           print(f"Default branch: {default_branch}")
           
-          # Get current README from GitHub API (not local file)
+          # Get current README from GitHub
           result = subprocess.run(['gh', 'api', f'/repos/{repo}/contents/README.md?ref={default_branch}'], 
-                                capture_output=True, text=True, check=True)
+                                capture_output=True, text=True)
+          
+          if result.returncode != 0:
+              print("Error fetching README")
+              exit(1)
+              
           file_info = json.loads(result.stdout)
           current_sha = file_info['sha']
           current_content = base64.b64decode(file_info['content']).decode('utf-8')
           
           # Get all release tags
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
-                                capture_output=True, text=True, check=True)
+                                capture_output=True, text=True)
           releases = json.loads(result.stdout)
           tags = [r['tagName'] for r in releases]
           
-          # Update content
-          content = current_content
-          
           # Remove existing Published Versions section
+          content = current_content
           if '## Published Versions' in content:
               content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
+              print("Removed old versions section")
           
           # Build new section
           if tags:
               new_section = '\n## Published Versions\n'
               for tag in tags:
                   new_section += f'- {tag}\n'
-              print(f"✅ Updated with {len(tags)} tags")
+              print(f"Added {len(tags)} tags: {', '.join(tags)}")
           else:
               new_section = ''
+              print("No tags found")
           
           # Clean up and create final content
           content = re.sub(r'\n{3,}', '\n\n', content)
           new_content = content + new_section
           
-          # Only update if changed
+          # Check if changed
           if new_content == current_content:
               print("No changes needed")
               exit(0)
@@ -81,9 +86,9 @@ jobs:
           ], capture_output=True, text=True)
           
           if result.returncode == 0:
-              print("✅ README updated successfully on GitHub")
+              print("✅ README successfully updated on GitHub!")
           else:
-              print(f"❌ Failed to update: {result.stderr}")
+              print(f"❌ Failed: {result.stderr}")
               exit(1)
-          
+              
           PYTHON_SCRIPT
