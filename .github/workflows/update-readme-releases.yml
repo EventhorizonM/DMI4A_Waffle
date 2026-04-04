@@ -1,6 +1,7 @@
-name: Update README with Released Versions
+name: Update README with Release Tags
 
 on:
+  workflow_dispatch:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
 
@@ -9,54 +10,42 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Fetch all releases
-        id: releases
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const releases = await github.rest.repos.listReleases({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 100
-            });
-            
-            const versions = releases.data.map(release => `- ${release.tag_name}`).join('\n');
-            core.setOutput('versions', versions);
-
-      - name: Update README
+      - name: Update README with tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          python3 << 'EOF'
+          python3 << 'PYTHON_SCRIPT'
+          import subprocess
+          import json
           import re
           
+          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
+                                capture_output=True, text=True)
+          releases = json.loads(result.stdout)
+          tags = [r['tagName'] for r in releases]
+          
           with open('README.md', 'r') as f:
-              content = f.read()
+            content = f.read()
           
-          # Pattern to match the Published Versions section
-          pattern = r'(## Published Versions\n)(.*?)(\n(?=##|$))'
+          content = re.sub(r'\nPublished Versions:.*', '', content, flags=re.DOTALL)
           
-          # Create replacement with versions
-          versions_text = """${{ steps.releases.outputs.versions }}\n"""
-          replacement = r'\1' + versions_text + r'\3'
-          
-          # If no versions section exists, add it at the end
-          if '## Published Versions' not in content:
-              content += '\n## Published Versions\n' + versions_text
-          else:
-              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+          # Build new section with better formatting
+          new_section = '\n\n## Published Versions\n'
+          for tag in tags:
+            new_section += f'- {tag}\n'
           
           with open('README.md', 'w') as f:
-              f.write(content)
-          EOF
+            f.write(content + new_section)
+          PYTHON_SCRIPT
 
       - name: Commit and push changes
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add README.md
-          git commit -m "chore: update README with released versions" || echo "No changes to commit"
-          git push origin HEAD:main
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
