@@ -5,6 +5,9 @@ on:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   update-readme:
     runs-on: ubuntu-latest
@@ -13,7 +16,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Update README with tags
         env:
