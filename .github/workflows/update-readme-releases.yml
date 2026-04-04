@@ -18,6 +18,7 @@ jobs:
           fetch-depth: 0
 
       - name: Update README with tags
+        id: update
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -25,8 +26,7 @@ jobs:
           import subprocess
           import json
           import re
-          import base64
-          import requests
+          import os
           
           # Get all release tags
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
@@ -52,43 +52,57 @@ jobs:
           
           # Clean up any double newlines
           content = re.sub(r'\n{3,}', '\n\n', content)
+          final_content = content + new_section
           
-          # Write updated content to file
+          # Write updated content
           with open('README.md', 'w') as f:
-            f.write(content + new_section)
+            f.write(final_content)
+          
+          # Save for later step
+          with open('updated_content.txt', 'w') as f:
+            f.write(final_content)
           
           print(f"Updated with {len(tags)} tags")
           PYTHON_SCRIPT
 
-      - name: Commit and push via API
+      - name: Commit via GitHub API
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get the current commit SHA of the default branch
+          # Get default branch
           DEFAULT_BRANCH=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}" | \
-            jq -r '.default_branch')
+            python3 -c "import sys, json; print(json.load(sys.stdin)['default_branch'])")
           
           echo "Default branch: $DEFAULT_BRANCH"
           
-          # Get the current commit SHA
-          COMMIT_SHA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/${DEFAULT_BRANCH}" | \
-            jq -r '.commit.sha')
+          # Get current file SHA and content
+          FILE_INFO=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${DEFAULT_BRANCH}")
           
-          echo "Current commit SHA: $COMMIT_SHA"
+          CURRENT_SHA=$(echo "$FILE_INFO" | python3 -c "import sys, json; print(json.load(sys.stdin).get('sha', ''))")
           
-          # Encode the updated README file
-          CONTENT=$(base64 -w 0 README.md)
+          # Encode the new content
+          ENCODED_CONTENT=$(cat README.md | python3 -c "import sys, base64; print(base64.b64encode(sys.stdin.read().encode()).decode())")
           
-          # Create a new commit via API
-          curl -X PUT \
+          # Update the file via API
+          RESPONSE=$(curl -s -X PUT \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md" \
             -d "{
               \"message\": \"Update README with release tags [skip ci]\",
-              \"content\": \"${CONTENT}\",
-              \"sha\": \"$(curl -s -H "Authorization: token $GITHUB_TOKEN" "https://api.github.com/repos/${GITHUB_REPOSITORY}/contents/README.md" | jq -r '.sha')\",
+              \"content\": \"${ENCODED_CONTENT}\",
+              \"sha\": \"${CURRENT_SHA}\",
               \"branch\": \"${DEFAULT_BRANCH}\"
-            }"
+            }")
+          
+          echo "$RESPONSE"
+          
+          if echo "$RESPONSE" | grep -q '"commit"'; then
+            echo "✅ Successfully updated README.md"
+          else
+            echo "❌ Failed to update README.md"
+            echo "$RESPONSE"
+            exit 1
+          fi
