@@ -28,18 +28,18 @@ jobs:
             -f branch="${BRANCH}" \
             -f sha="${SHA}" \
             -f content="$(echo "$(gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BRANCH}" --jq '.content' | base64 -d | python3 -c "
-import sys, re, json, subprocess
-content = sys.stdin.read()
-# Get releases
-releases = json.loads(subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], capture_output=True, text=True).stdout)
-tags = [r['tagName'] for r in releases]
-# Remove old section
-if '## Published Versions' in content:
-    content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
-# Add new section
-if tags:
-    content += '\n## Published Versions\n' + ''.join(f'- {tag}\n' for tag in tags)
-# Cleanup
-content = re.sub(r'\n{3,}', '\n\n', content)
-print(content, end='')
-") | base64 -w 0)"
+            import sys, re, json, subprocess
+            content = sys.stdin.read()
+            # Get releases
+            releases = json.loads(subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], capture_output=True, text=True).stdout)
+            tags = [r['tagName'] for r in releases]
+            # Remove old section
+            if '## Published Versions' in content:
+                content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
+            # Add new section
+            if tags:
+                content += '\n## Published Versions\n' + ''.join(f'- {tag}\n' for tag in tags)
+            # Cleanup
+            content = re.sub(r'\n{3,}', '\n\n', content)
+            print(content, end='')
+            ") | base64 -w 0)"
