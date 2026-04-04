@@ -1,0 +1,56 @@
+name: Update README with Release Tags
+
+on:
+  release:
+    types: [created, published, edited, released, prereleased, unpublished]
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get all release tags
+        id: tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get all releases and extract tags
+          TAGS=$(gh release list --json tagName -q '.[].tagName')
+          
+          # Create the tags list
+          TAGS_LIST="Published Versions:"
+          while IFS= read -r tag; do
+            TAGS_LIST="$TAGS_LIST"$'\n'"($tag)"
+          done <<< "$TAGS"
+          
+          # Save to output
+          echo "tags_list<<EOF" >> $GITHUB_OUTPUT
+          echo "$TAGS_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Update README
+        env:
+          TAGS_LIST: ${{ steps.tags.outputs.tags_list }}
+        run: |
+          # Read current README
+          README_CONTENT=$(cat README.md)
+          
+          # Remove old "Published Versions" section if it exists
+          README_CONTENT=$(echo "$README_CONTENT" | sed '/^Published Versions:/,$d')
+          
+          # Append new tags section
+          echo "$README_CONTENT" > README.md
+          echo "" >> README.md
+          echo "$TAGS_LIST" >> README.md
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
