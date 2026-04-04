@@ -1,54 +1,58 @@
-name: Generate Release Notes
+name: Update README with Release Tags
 
 on:
   workflow_dispatch:
-    inputs:
-      tag_name:
-        description: 'Release tag (e.g., V0.1)'
-        required: true
-        type: string
   release:
     types: [created, published, edited, released, prereleased, unpublished]
-  
+
 jobs:
-  create-release-notes:
+  update-readme:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     
     steps:
-      - name: Set release tag
-        id: tag
-        run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
-          fi
-
       - name: Checkout repository
         uses: actions/checkout@v5
-        with:
-          ref: ${{ steps.tag.outputs.tag }}
 
-      - name: Get release info
-        id: release
+      - name: Get all release tags
+        id: tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            gh release view ${{ steps.tag.outputs.tag }} --json body -q '.body' > release_body.txt
-          else
-            echo "${{ github.event.release.body }}" > release_body.txt
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Get all releases and extract tags
+          TAGS=$(gh release list --json tagName -q '.[].tagName')
+          
+          # Create temporary file with tags list
+          cat > /tmp/tags_list.txt << 'EOF'
+          Published Versions:
+          EOF
+          
+          while IFS= read -r tag; do
+            echo "($tag)" >> /tmp/tags_list.txt
+          done <<< "$TAGS"
+          
+          # Save to output
+          echo "tags_list<<EOF" >> $GITHUB_OUTPUT
+          cat /tmp/tags_list.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create RNotes.txt
-        run: cat release_body.txt > RNotes.txt
+      - name: Update README
+        run: |
+          # Read current README
+          README_CONTENT=$(cat README.md)
+          
+          # Remove old "Published Versions" section if it exists
+          README_CONTENT=$(echo "$README_CONTENT" | sed '/^Published Versions:/,$d')
+          
+          # Append new tags section
+          echo "$README_CONTENT" > README.md
+          echo "" >> README.md
+          cat /tmp/tags_list.txt >> README.md
 
-      - name: Upload to release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: RNotes.txt
-          tag_name: ${{ steps.tag.outputs.tag }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
