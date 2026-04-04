@@ -8,3 +8,9 @@ Enjoy using it ;)
 ## Published Versions
 - V0.2
 - V0.1
+
+
+## Published Versions
+- V3.0.0.0.0.0
+- V0.2
+- V0.1
