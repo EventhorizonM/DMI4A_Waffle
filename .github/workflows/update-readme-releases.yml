@@ -12,85 +12,34 @@ jobs:
       contents: write
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - name: Update README using gh API
+      - name: Update README directly via API
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Get default branch
-          DEFAULT_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
-          echo "Default branch: $DEFAULT_BRANCH"
+          BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
           
-          # Get current README content and SHA
-          gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${DEFAULT_BRANCH}" > readme_info.json
-          CURRENT_SHA=$(jq -r '.sha' readme_info.json)
-          echo "Current SHA: $CURRENT_SHA"
+          # Get current README SHA
+          SHA=$(gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BRANCH}" --jq '.sha')
           
-          # Decode current content
-          cat readme_info.json | jq -r '.content' | base64 -d > current_readme.md
-          
-          # Get all release tags
-          gh release list --json tagName > releases.json
-          
-          # Update README with Python
-          python3 << 'PYTHON_SCRIPT'
-          import json
-          import re
-          
-          # Load current README
-          with open('current_readme.md', 'r') as f:
-              content = f.read()
-          
-          # Load releases
-          with open('releases.json', 'r') as f:
-              releases = json.load(f)
-          
-          tags = [r['tagName'] for r in releases]
-          
-          # Remove existing Published Versions section
-          if '## Published Versions' in content:
-              content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
-          
-          # Build new section
-          if tags:
-              new_section = '\n## Published Versions\n'
-              for tag in tags:
-                  new_section += f'- {tag}\n'
-          else:
-              new_section = ''
-          
-          # Clean up and write
-          content = re.sub(r'\n{3,}', '\n\n', content)
-          new_content = content + new_section
-          
-          with open('updated_readme.md', 'w') as f:
-              f.write(new_content)
-          
-          # Check if changed
-          with open('current_readme.md', 'r') as f:
-              old_content = f.read()
-          
-          if new_content == old_content:
-              print("NO_CHANGES")
-          else:
-              print("CHANGES_MADE")
-          PYTHON_SCRIPT
-          
-          # If changes were made, update via API
-          if grep -q "CHANGES_MADE" <<< "$(python3 <<< 'print("CHANGES_MADE" if open("updated_readme.md").read() != open("current_readme.md").read() else "NO_CHANGES")')"; then
-              ENCODED=$(base64 -w 0 updated_readme.md)
-              
-              gh api --method PUT "/repos/${GITHUB_REPOSITORY}/contents/README.md" \
-                -f message="Update README with release tags [skip ci]" \
-                -f content="${ENCODED}" \
-                -f sha="${CURRENT_SHA}" \
-                -f branch="${DEFAULT_BRANCH}"
-              
-              echo "✅ README updated successfully"
-          else
-              echo "ℹ️ No changes needed"
-          fi
+          # Get releases and update README in one go
+          gh api --method PUT "/repos/${GITHUB_REPOSITORY}/contents/README.md" \
+            -f message="Update README with release tags [skip ci]" \
+            -f branch="${BRANCH}" \
+            -f sha="${SHA}" \
+            -f content="$(echo "$(gh api "/repos/${GITHUB_REPOSITORY}/contents/README.md?ref=${BRANCH}" --jq '.content' | base64 -d | python3 -c "
+import sys, re, json, subprocess
+content = sys.stdin.read()
+# Get releases
+releases = json.loads(subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], capture_output=True, text=True).stdout)
+tags = [r['tagName'] for r in releases]
+# Remove old section
+if '## Published Versions' in content:
+    content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
+# Add new section
+if tags:
+    content += '\n## Published Versions\n' + ''.join(f'- {tag}\n' for tag in tags)
+# Cleanup
+content = re.sub(r'\n{3,}', '\n\n', content)
+print(content, end='')
+") | base64 -w 0)"
