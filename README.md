@@ -5,15 +5,3 @@ You can make a delicious waffle with it :)
 With a lot of fantastic recipes...
 Enjoy using it ;)
 
-
-
-## Published Versions
-- V3.0.0.0.0.0
-- V0.2
-- V0.1
-
-
-## Published Versions
-- V3.0.0.0.0.0
-- V0.2
-- V0.1
