@@ -13,86 +13,81 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v5
 
-      - name: Update README via GitHub API (NO git commands)
+      - name: Update README with tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # This script uses ONLY GitHub API - NO git commit, NO git push
           python3 << 'PYTHON_SCRIPT'
           import subprocess
           import json
           import re
-          import base64
-          import os
           
-          repo = os.environ['GITHUB_REPOSITORY']
-          token = os.environ['GH_TOKEN']
-          
-          # Get default branch
-          result = subprocess.run(['gh', 'repo', 'view', '--json', 'defaultBranchRef'], 
-                                capture_output=True, text=True)
-          repo_info = json.loads(result.stdout)
-          default_branch = repo_info['defaultBranchRef']['name']
-          print(f"Default branch: {default_branch}")
-          
-          # Get current README file info from API
-          result = subprocess.run(['gh', 'api', f'/repos/{repo}/contents/README.md?ref={default_branch}'], 
-                                capture_output=True, text=True)
-          file_info = json.loads(result.stdout)
-          current_sha = file_info['sha']
-          current_content = base64.b64decode(file_info['content']).decode('utf-8')
-          
-          # Get all release tags
-          result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
-                                capture_output=True, text=True)
-          releases = json.loads(result.stdout)
-          tags = [r['tagName'] for r in releases]
-          
-          # Update content
-          content = current_content
-          
-          # Remove existing Published Versions section
-          if '## Published Versions' in content:
-            content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
-            print("Removed old versions section")
-          
-          # Build new section
-          if tags:
-            new_section = '\n## Published Versions\n'
-            for tag in tags:
-              new_section += f'- {tag}\n'
-            print(f"Added {len(tags)} tags")
-          else:
-            new_section = ''
-          
-          # Clean up double newlines
-          content = re.sub(r'\n{3,}', '\n\n', content)
-          new_content = content + new_section
-          
-          # Only update if changed
-          if new_content == current_content:
-            print("No changes needed")
-            exit(0)
-          
-          # Update via API
-          encoded_content = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
-          
-          result = subprocess.run([
-            'gh', 'api', '--method', 'PUT', f'/repos/{repo}/contents/README.md',
-            '-f', f'message=Update README with release tags [skip ci]',
-            '-f', f'content={encoded_content}',
-            '-f', f'sha={current_sha}',
-            '-f', f'branch={default_branch}'
-          ], capture_output=True, text=True)
-          
-          if result.returncode == 0:
-            print("✅ README updated successfully via API")
-          else:
-            print(f"❌ Failed to update: {result.stderr}")
-            exit(1)
-          
+          try:
+              # Get all release tags
+              result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
+                                    capture_output=True, text=True, check=True)
+              releases = json.loads(result.stdout)
+              tags = [r['tagName'] for r in releases]
+              
+              # Read current README
+              with open('README.md', 'r') as f:
+                  content = f.read()
+              
+              # More robust pattern: Remove from "## Published Versions" until next ## or end of file
+              pattern = r'\n## Published Versions\n(?:- .*\n)*?(?=\n## |\Z)'
+              new_content = re.sub(pattern, '\n', content, flags=re.MULTILINE | re.DOTALL)
+              
+              # Check if any replacement was made
+              if new_content == content and '## Published Versions' in content:
+                  # Fallback: simpler pattern
+                  new_content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
+              
+              content = new_content
+              
+              # Build new section
+              if tags:
+                  new_section = '\n## Published Versions\n'
+                  for tag in tags:
+                      new_section += f'- {tag}\n'
+                  print(f"✅ Updated with {len(tags)} tags: {', '.join(tags)}")
+              else:
+                  new_section = ''
+                  print("ℹ️ No tags found, section removed")
+              
+              # Clean up excessive blank lines
+              content = re.sub(r'\n{3,}', '\n\n', content)
+              
+              # Write updated content
+              with open('README.md', 'w') as f:
+                  f.write(content + new_section)
+              
+              print(f"✅ README.md successfully updated")
+              
+          except subprocess.CalledProcessError as e:
+              print(f"❌ Error running gh command: {e}")
+              exit(1)
+          except json.JSONDecodeError as e:
+              print(f"❌ Error parsing JSON: {e}")
+              exit(1)
+          except FileNotFoundError:
+              print(f"❌ README.md not found")
+              exit(1)
+          except Exception as e:
+              print(f"❌ Unexpected error: {e}")
+              exit(1)
           PYTHON_SCRIPT
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update README with release tags"
+            git push origin HEAD:main --force
+            echo "✅ Changes committed and pushed"
+          fi
