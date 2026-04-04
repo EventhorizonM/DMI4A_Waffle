@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   
 jobs:
   update-readme:
@@ -16,7 +13,7 @@ jobs:
     
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v
 
       - name: Get all release tags
         id: tags
