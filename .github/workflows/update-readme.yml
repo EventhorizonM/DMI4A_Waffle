@@ -1,6 +1,7 @@
 name: Update README with Release Tags
 
 on:
+  workflow_dispatch:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
 
@@ -19,16 +20,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Get all releases and extract tags
           TAGS=$(gh release list --json tagName -q '.[].tagName')
-          
-          # Create the tags list
           TAGS_LIST="Published Versions:"
           while IFS= read -r tag; do
             TAGS_LIST="$TAGS_LIST"$'\n'"($tag)"
           done <<< "$TAGS"
-          
-          # Save to output
           echo "tags_list<<EOF" >> $GITHUB_OUTPUT
           echo "$TAGS_LIST" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -37,13 +33,8 @@ jobs:
         env:
           TAGS_LIST: ${{ steps.tags.outputs.tags_list }}
         run: |
-          # Read current README
           README_CONTENT=$(cat README.md)
-          
-          # Remove old "Published Versions" section if it exists
           README_CONTENT=$(echo "$README_CONTENT" | sed '/^Published Versions:/,$d')
-          
-          # Append new tags section
           echo "$README_CONTENT" > README.md
           echo "" >> README.md
           echo "$TAGS_LIST" >> README.md
