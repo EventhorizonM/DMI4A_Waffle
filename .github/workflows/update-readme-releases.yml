@@ -1,0 +1,69 @@
+name: Update README with Released Versions
+
+on:
+  release:
+    types: [created, published, edited, released, prereleased, unpublished]
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch all releases
+        id: releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            
+            const versions = releases.data.map(release => `- ${release.tag_name}`).join('\n');
+            core.setOutput('versions', versions);
+
+      - name: Update README
+        run: |
+          # Read the current README
+          README_CONTENT=$(cat README.md)
+          
+          # Create the new versions section
+          NEW_VERSIONS="${{ steps.releases.outputs.versions }}"
+          
+          # Replace the Published Versions section
+          python3 << 'EOF'
+          import re
+          
+          with open('README.md', 'r') as f:
+              content = f.read()
+          
+          # Pattern to match the Published Versions section
+          pattern = r'(## Published Versions\n)(.*?)(\n(?=##|$))'
+          
+          # Create replacement with versions
+          versions_text = """${{ steps.releases.outputs.versions }}\n"""
+          replacement = r'\1' + versions_text + r'\3'
+          
+          # If no versions section exists, add it at the end
+          if '## Published Versions' not in content:
+              content += '\n## Published Versions\n' + versions_text
+          else:
+              content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+          
+          with open('README.md', 'w') as f:
+              f.write(content)
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md
+          git commit -m "chore: update README with released versions" || echo "No changes to commit"
+          git push || echo "Nothing to push"
