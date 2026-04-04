@@ -17,14 +17,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Configure Git
+      - name: Configure Git and checkout main branch
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git config --local push.default simple
+          git checkout -B main origin/main
 
       - name: Update README with tags
         env:
@@ -57,4 +55,4 @@ jobs:
       - name: Commit and push changes
         run: |
           git add README.md
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push origin HEAD:refs/heads/main)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update README with release tags" && git push)
