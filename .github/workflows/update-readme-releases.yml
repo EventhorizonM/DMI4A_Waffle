@@ -5,13 +5,6 @@ on:
   release:
     types: [created, published, edited, released, prereleased, unpublished]
 
-# Disable all automatic git operations
-env:
-  GIT_AUTHOR_NAME: "GitHub Action"
-  GIT_AUTHOR_EMAIL: "action@github.com"
-  GIT_COMMITTER_NAME: "GitHub Action"
-  GIT_COMMITTER_EMAIL: "action@github.com"
-
 jobs:
   update-readme:
     runs-on: ubuntu-latest
@@ -19,11 +12,6 @@ jobs:
       contents: write
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
       - name: Update README via GitHub API
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -33,28 +21,26 @@ jobs:
           import json
           import re
           import base64
-          import os
           
-          repo = os.environ['GITHUB_REPOSITORY']
-          token = os.environ['GH_TOKEN']
+          repo = "${{ github.repository }}"
           
           # Get default branch
           result = subprocess.run(['gh', 'repo', 'view', '--json', 'defaultBranchRef'], 
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, check=True)
           repo_info = json.loads(result.stdout)
           default_branch = repo_info['defaultBranchRef']['name']
           print(f"Default branch: {default_branch}")
           
-          # Get current README file info from API
+          # Get current README from GitHub API (not local file)
           result = subprocess.run(['gh', 'api', f'/repos/{repo}/contents/README.md?ref={default_branch}'], 
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, check=True)
           file_info = json.loads(result.stdout)
           current_sha = file_info['sha']
           current_content = base64.b64decode(file_info['content']).decode('utf-8')
           
           # Get all release tags
           result = subprocess.run(['gh', 'release', 'list', '--json', 'tagName'], 
-                                capture_output=True, text=True)
+                                capture_output=True, text=True, check=True)
           releases = json.loads(result.stdout)
           tags = [r['tagName'] for r in releases]
           
@@ -63,44 +49,41 @@ jobs:
           
           # Remove existing Published Versions section
           if '## Published Versions' in content:
-            content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
-            print("Removed old versions section")
+              content = re.sub(r'\n## Published Versions\n(?:- .*?\n)*', '\n', content)
           
           # Build new section
           if tags:
-            new_section = '\n## Published Versions\n'
-            for tag in tags:
-              new_section += f'- {tag}\n'
-            print(f"Added {len(tags)} tags")
+              new_section = '\n## Published Versions\n'
+              for tag in tags:
+                  new_section += f'- {tag}\n'
+              print(f"✅ Updated with {len(tags)} tags")
           else:
-            new_section = ''
+              new_section = ''
           
-          # Clean up double newlines
+          # Clean up and create final content
           content = re.sub(r'\n{3,}', '\n\n', content)
           new_content = content + new_section
           
           # Only update if changed
           if new_content == current_content:
-            print("No changes needed")
-            exit(0)
+              print("No changes needed")
+              exit(0)
           
-          # Update via API
+          # Update via GitHub API
           encoded_content = base64.b64encode(new_content.encode('utf-8')).decode('utf-8')
           
           result = subprocess.run([
-            'gh', 'api', '--method', 'PUT', f'/repos/{repo}/contents/README.md',
-            '-f', f'message=Update README with release tags [skip ci]',
-            '-f', f'content={encoded_content}',
-            '-f', f'sha={current_sha}',
-            '-f', f'branch={default_branch}'
+              'gh', 'api', '--method', 'PUT', f'/repos/{repo}/contents/README.md',
+              '-f', f'message=Update README with release tags [skip ci]',
+              '-f', f'content={encoded_content}',
+              '-f', f'sha={current_sha}',
+              '-f', f'branch={default_branch}'
           ], capture_output=True, text=True)
           
           if result.returncode == 0:
-            print("✅ README updated successfully via API")
+              print("✅ README updated successfully on GitHub")
           else:
-            print(f"❌ Failed to update: {result.stderr}")
-            exit(1)
+              print(f"❌ Failed to update: {result.stderr}")
+              exit(1)
           
           PYTHON_SCRIPT
-      
-      # THAT'S IT - NO OTHER STEPS!
