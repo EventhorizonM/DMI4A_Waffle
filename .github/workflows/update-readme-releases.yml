@@ -88,6 +88,6 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "Update README with release tags"
-            git push
+            git push origin HEAD:main --force
             echo "✅ Changes committed and pushed"
           fi
